@@ -1,0 +1,18 @@
+{
+  "short_name": "Charles AI",
+  "name": "Charles AI Companion",
+  "description": "The Next-Generation Multi-Agent Assistant Optimized for sub-Saharan Africa and global creators.",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#050505",
+  "theme_color": "#8b5cf6",
+  "display": "standalone",
+  "orientation": "portrait"
+}

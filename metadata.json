@@ -1,0 +1,6 @@
+{
+  "name": "Charles AI",
+  "description": "Advanced multi-agent AI assistant for students, creators, and entrepreneurs. Features voice, vision, memory, and localized intelligence.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
