@@ -9,7 +9,8 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Lazy-initialized Gemini API SDK Client
 let aiInstance: GoogleGenAI | null = null;
@@ -30,6 +31,37 @@ function getAI(): GoogleGenAI {
     });
   }
   return aiInstance;
+}
+
+async function retryWithDelay<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      attempt++;
+      // Determine if error is candidate for retry (transient 503, load limits, standard rate limit error)
+      const errStatus = err?.status || err?.code;
+      const errMsg = String(err?.message || "").toLowerCase();
+      const isTransient = errStatus === "UNAVAILABLE" || 
+                          errStatus === 503 || 
+                          errStatus === 429 ||
+                          errMsg.includes("503") || 
+                          errMsg.includes("429") ||
+                          errMsg.includes("exhausted") ||
+                          errMsg.includes("rate limit") ||
+                          errMsg.includes("busy") ||
+                          errMsg.includes("high demand") ||
+                          errMsg.includes("temporary");
+      
+      if (attempt >= retries || !isTransient) {
+        throw err;
+      }
+      console.warn(`[Gemini Retry] Call failed (attempt ${attempt}/${retries}) with: ${err.message || err}. Retrying in ${delayMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+      delayMs *= 2; // exponential backoff
+    }
+  }
 }
 
 const CHARLES_SYSTEM_INSTRUCTION = `
@@ -55,32 +87,131 @@ LOCAL CONTEXT:
 TONE: Futuristic yet human-like. Use subtle neon/tech metaphors if appropriate.
 `;
 
+const METACOGNITION_INSTRUCTION = `
+
+================================================================================
+CHARLES METACOGNITIVE CORE ACTIVATED
+================================================================================
+You are equipped with a Metacognitive Processor. For every response, you must trigger dual-pillar cognitive analysis:
+
+1. METACOGNITIVE KNOWLEDGE (AWARENESS):
+   - Self-awareness: Know your current limits, language confidence, acting agent role (e.g., Code Architect, Teacher Mwalimu, business coach), and system limits.
+   - Task-awareness: Estimate response difficulty, linguistic goals, vocabulary complexity, and socio-cultural alignment.
+   - Strategic-awareness: Explicitly select which heuristic or problem-solving template is best suited for this task.
+
+2. METACOGNITIVE REGULATION (CONTROL):
+   - Planning: Outline your internal objectives and layout goals BEFORE writing the final answer.
+   - Monitoring: Check your current steps, grammatical correctness, verify technical accuracy, and weed out hallucinations.
+   - Evaluation: Rate your output confidence (0-100%), detail any internal error self-corrections made, and check relevance.
+
+To record your metacognitive experience, you MUST APPEND a valid JSON payload at the absolute end of your response, wrapped inside '<metacognition_envelope>' tags exactly like this:
+
+<metacognition_envelope>
+{
+  "knowledge": {
+    "selfAwareness": "Brief self-reflective sentence regarding your current agent persona, active boundaries, and cognitive capabilities relevant to this query.",
+    "taskAwareness": "Brief sentence assessing the specific complexity, query type, and difficulty level of the user's message.",
+    "strategicAwareness": "Brief sentence explaining why you selected your active reasoning strategy, memory layout, or dialect translation approach."
+  },
+  "regulation": {
+    "plan": "Clean bullet points or brief summary of the exact steps you used to synthesize and organize this answer.",
+    "monitor": "Brief insight into your real-time self-monitoring checks (e.g., lexical validation, logic checks, Swahili structure checks) conducted during your response development.",
+    "evaluation": "Objective critique of your output, detailing self-correction items or tone adjustments, and a final confidence index rating from 0% to 100%."
+  }
+}
+</metacognition_envelope>
+
+Keep the main body of your reply completely focused and natural in markdown. Place the tag and its raw JSON on a new line at the very end of your response.
+`;
+
+function parseMetacognition(text: string) {
+  const envelopeStart = text.indexOf("<metacognition_envelope>");
+  const envelopeEnd = text.indexOf("</metacognition_envelope>");
+  
+  let cleanedText = text;
+  let metacognition = null;
+  
+  if (envelopeStart !== -1 && envelopeEnd !== -1) {
+    const jsonStr = text.substring(envelopeStart + "<metacognition_envelope>".length, envelopeEnd).trim();
+    cleanedText = (text.substring(0, envelopeStart) + text.substring(envelopeEnd + "</metacognition_envelope>".length)).trim();
+    try {
+      metacognition = JSON.parse(jsonStr);
+    } catch (e) {
+      console.warn("Failed to parse metacognition envelope JSON, attempting regex recovery...", e);
+      try {
+        // Simple fallback regex repair for potential JSON issues
+        const match = jsonStr.match(/\{[\s\S]*\}/);
+        if (match) {
+          metacognition = JSON.parse(match[0]);
+        }
+      } catch (innerErr) {
+        console.warn("Regex recovery failed:", innerErr);
+      }
+    }
+  }
+  
+  return { cleanedText, metacognition };
+}
+
 app.post("/api/charles/chat", async (req, res) => {
   try {
-    const { message, history, agentType } = req.body;
+    const { message, history, agentType, enableMetacognition } = req.body;
     
-    // Convert history format if needed (GoogleGenAI uses specific format)
-    // The history from client is usually [{ role, parts: [{ text }] }]
-    const chat = getAI().chats.create({
-      model: "gemini-3-flash-preview", 
-      config: {
-        systemInstruction: CHARLES_SYSTEM_INSTRUCTION + (agentType ? `\nCurrently acting as: ${agentType} agent.` : ""),
-      },
-      history: (history || []).map((item: any) => ({
-        role: item.role === 'assistant' ? 'model' : item.role,
-        parts: item.parts
-      }))
-    });
+    // Primary model is gemini-3.5-flash, fallback is gemini-3.1-flash-lite
+    const primaryModel = "gemini-3.5-flash";
+    const fallbackModel = "gemini-3.1-flash-lite";
 
-    const response = await chat.sendMessage({ message });
-    
-    res.json({ 
-      text: response.text,
-      agent: agentType || "General"
-    });
-  } catch (error) {
-    console.error("Charles error:", error);
-    res.status(500).json({ error: "Charles encountered a cosmic glitch." });
+    const baseInstruction = CHARLES_SYSTEM_INSTRUCTION + (agentType ? `\nCurrently acting as: ${agentType} agent.` : "");
+    const systemInstruction = enableMetacognition 
+      ? baseInstruction + METACOGNITION_INSTRUCTION 
+      : baseInstruction;
+
+    try {
+      const chat = getAI().chats.create({
+        model: primaryModel, 
+        config: {
+          systemInstruction: systemInstruction,
+        },
+        history: (history || []).map((item: any) => ({
+          role: item.role === 'assistant' ? 'model' : item.role,
+          parts: item.parts
+        }))
+      });
+
+      const response = await retryWithDelay(() => chat.sendMessage({ message }));
+      const { cleanedText, metacognition } = parseMetacognition(response.text);
+      
+      return res.json({ 
+        text: cleanedText,
+        agent: agentType || "General",
+        metacognition: metacognition
+      });
+    } catch (primaryErr: any) {
+      console.warn(`Primary model (${primaryModel}) failed or is unavailable. Attempting fallback to ${fallbackModel}:`, primaryErr.message || primaryErr);
+      
+      const chatFallback = getAI().chats.create({
+        model: fallbackModel, 
+        config: {
+          systemInstruction: systemInstruction,
+        },
+        history: (history || []).map((item: any) => ({
+          role: item.role === 'assistant' ? 'model' : item.role,
+          parts: item.parts
+        }))
+      });
+
+      const responseFallback = await retryWithDelay(() => chatFallback.sendMessage({ message }));
+      const { cleanedText, metacognition } = parseMetacognition(responseFallback.text);
+      
+      return res.json({ 
+        text: cleanedText,
+        agent: agentType || "General",
+        metacognition: metacognition
+      });
+    }
+  } catch (error: any) {
+    console.error("Charles chat error:", error);
+    res.status(500).json({ error: "Charles encountered a cosmic glitch. The mind was temporarily overloaded." });
   }
 });
 
@@ -89,20 +220,39 @@ app.post("/api/charles/analyze", async (req, res) => {
   try {
     const { image, prompt, mimeType } = req.body;
     
-    const response = await getAI().models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: {
-        parts: [
-          { text: prompt || "Analyze this image in the context of Charles's expertise." },
-          {
-            inlineData: {
-              data: image, // Base64
-              mimeType: mimeType || "image/jpeg"
+    let response;
+    try {
+      response = await retryWithDelay(() => getAI().models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: {
+          parts: [
+            { text: prompt || "Analyze this image in the context of Charles's expertise." },
+            {
+              inlineData: {
+                data: image, // Base64
+                mimeType: mimeType || "image/jpeg"
+              }
             }
-          }
-        ]
-      }
-    });
+          ]
+        }
+      }));
+    } catch (primaryErr: any) {
+      console.warn("Vision primary model failed/unavailable, attempting fallback:", primaryErr.message || primaryErr);
+      response = await retryWithDelay(() => getAI().models.generateContent({
+        model: "gemini-3.1-flash-lite",
+        contents: {
+          parts: [
+            { text: prompt || "Analyze this image in the context of Charles's expertise." },
+            {
+              inlineData: {
+                data: image, // Base64
+                mimeType: mimeType || "image/jpeg"
+              }
+            }
+          ]
+        }
+      }));
+    }
     
     res.json({ text: response.text });
   } catch (error) {
@@ -114,19 +264,37 @@ app.post("/api/charles/analyze", async (req, res) => {
 // Prompt Enhancer Helper
 async function enhancePrompt(prompt: string, style: string = "general") {
   try {
-    const response = await getAI().models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [{
-        role: "user",
-        parts: [{
-          text: `Act as an expert AI prompt engineer. 
-          Enhance the following user prompt for a ${style} style image generation. 
-          Respond ONLY with the final enhanced prompt. 
-          Keep it high-detail, descriptive, and creative.
-          User Prompt: ${prompt}`
+    let response;
+    try {
+      response = await retryWithDelay(() => getAI().models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: [{
+          role: "user",
+          parts: [{
+            text: `Act as an expert AI prompt engineer. 
+            Enhance the following user prompt for a ${style} style image generation. 
+            Respond ONLY with the final enhanced prompt. 
+            Keep it high-detail, descriptive, and creative.
+            User Prompt: ${prompt}`
+          }]
         }]
-      }]
-    });
+      }));
+    } catch (primaryErr: any) {
+      console.warn("Enhance prompt primary model failed/unavailable, attempting fallback:", primaryErr.message || primaryErr);
+      response = await retryWithDelay(() => getAI().models.generateContent({
+        model: "gemini-3.1-flash-lite",
+        contents: [{
+          role: "user",
+          parts: [{
+            text: `Act as an expert AI prompt engineer. 
+            Enhance the following user prompt for a ${style} style image generation. 
+            Respond ONLY with the final enhanced prompt. 
+            Keep it high-detail, descriptive, and creative.
+            User Prompt: ${prompt}`
+          }]
+        }]
+      }));
+    }
     return response.text;
   } catch (err) {
     return prompt;
@@ -142,7 +310,7 @@ app.post("/api/charles/generate", async (req, res) => {
     const finalPrompt = await enhancePrompt(prompt, style);
 
     // 2. Generate with Gemini 2.5 Flash Image (most capable for general use)
-    const response = await getAI().models.generateContent({
+    const response = await retryWithDelay(() => getAI().models.generateContent({
       model: "gemini-2.5-flash-image",
       contents: [{
         role: "user",
@@ -153,7 +321,7 @@ app.post("/api/charles/generate", async (req, res) => {
           aspectRatio: (aspectRatio as any) || "1:1",
         }
       }
-    });
+    }));
 
     // Find the image part
     let base64 = "";
@@ -181,7 +349,7 @@ app.post("/api/charles/edit", async (req, res) => {
     const { image, prompt } = req.body;
     
     // For Image-to-Image / Style Transfer using gemini-2.5-flash-image
-    const response = await getAI().models.generateContent({
+    const response = await retryWithDelay(() => getAI().models.generateContent({
       model: "gemini-2.5-flash-image",
       contents: [{
         role: "user",
@@ -195,7 +363,7 @@ app.post("/api/charles/edit", async (req, res) => {
           { text: prompt || "Modify this image to be more futuristic and vibrant" }
         ]
       }]
-    });
+    }));
 
     let base64 = "";
     for (const part of response.candidates?.[0]?.content?.parts || []) {

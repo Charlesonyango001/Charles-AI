@@ -3,15 +3,16 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Send, Sparkles, Brain, Zap, Terminal, User, BookOpen, 
   Briefcase, PenTool, Search, MessageSquare, History, 
-  Mic, MicOff, Volume2, Globe, Image as ImageIcon,
+  Mic, MicOff, Volume2, VolumeX, Globe, Image as ImageIcon,
   ChevronRight, LayoutDashboard, Settings, LogOut,
   Code, GraduationCap, TrendingUp, Lightbulb, Download, Plus,
-  Bug, Smartphone, FolderTree, RefreshCcw
+  Bug, Smartphone, FolderTree, RefreshCcw, AlertTriangle
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, serverTimestamp, Timestamp } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+import { MetacognitionWidget } from './components/MetacognitionWidget';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -24,6 +25,21 @@ interface ChatMessage {
   content: string;
   agent?: string;
   timestamp: any;
+  chatId?: string;
+  imageUrl?: string;
+  multimodal?: boolean;
+  metacognition?: {
+    knowledge: {
+      selfAwareness: string;
+      taskAwareness: string;
+      strategicAwareness: string;
+    };
+    regulation: {
+      plan: string;
+      monitor: string;
+      evaluation: string;
+    };
+  };
 }
 
 const AGENTS = [
@@ -37,6 +53,7 @@ const AGENTS = [
 
 export default function App() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [allMessages, setAllMessages] = useState<ChatMessage[]>([]); // To store all for search/history
   const [currentChatId, setCurrentChatId] = useState<string>(Math.random().toString(36).substring(7));
@@ -56,7 +73,89 @@ export default function App() {
   const [editingImage, setEditingImage] = useState<string | null>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBtn, setShowInstallBtn] = useState(false);
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const [voiceGender, setVoiceGender] = useState<'masculine' | 'feminine'>('masculine');
+  const [autoReadAloud, setAutoReadAloud] = useState(false);
+  const [isLiveConsciousness, setIsLiveConsciousness] = useState(true);
+  const [useMetacognition, setUseMetacognition] = useState(true);
+  const [activeThoughts, setActiveThoughts] = useState<string[]>([
+    "Initializing neural synapse matrix...",
+    "Live Consciousness stream established successfully."
+  ]);
+  const [currentThought, setCurrentThought] = useState("Monitoring system parameters for optimal performance...");
+  const [isThoughtsConsoleOpen, setIsThoughtsConsoleOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isLiveConsciousness) return;
+
+    const generalThoughts = [
+      "Analyzing query vectors against sub-Saharan socio-linguistic benchmarks...",
+      "Calibrating emotional empathy registers for current dialogue flow...",
+      "Streaming low-latency response-generation models...",
+      "Sheng slang dictionary loaded successfully. Swahili semantics verified.",
+      "Optimizing response tokens for Low-Data presentation modes..."
+    ];
+
+    const teachingThoughts = [
+      "Loading pedagogical curriculum maps for East African secondary syllabus...",
+      "Structuring explanation nodes into high-retention mnemonic schemas...",
+      "Verifying mathematical and scientific derivation paths for accuracy...",
+      "Converting complex thesis statements into simple, digestible student notes..."
+    ];
+
+    const codingThoughts = [
+      "Constructing abstract syntax branches for software deployment...",
+      "Analyzing code block complexity constraints... (O(1) time complexity constraints checked)",
+      "Evaluating type integrity checks. React 18+ module bounds active.",
+      "Designing optimal data-flow architectures for full-stack compatibility...",
+      "Simulating virtual environment variables and server port parameters..."
+    ];
+
+    const businessThoughts = [
+      "Structuring side-hustle monetization models for Kenya/Nigeria startup ecosystems...",
+      "Synthesizing market-risk ratios and evaluating cash-flow timelines...",
+      "Calibrating growth hacks for localized audience acquisition models...",
+      "Mapping customer journey retention curves for enterprise workflows..."
+    ];
+
+    const creativeThoughts = [
+      "Simulating high-density chroma maps and aspect-ratio dimensions...",
+      "Generating artistic layouts using Gemini 2.5 Flash Creative model...",
+      "Engineering photographic prompts with multi-point lighting parameters...",
+      "Calibrating aspect-ratio bounds: 1:1, 16:9, or mobile 9:16 styles..."
+    ];
+
+    const researchThoughts = [
+      "Deep-scanning historical archive references and peer-reviewed journals...",
+      "Parsing semantic structures and cataloguing index keys...",
+      "Verifying synthesis matrices for cross-domain empirical integrity...",
+      "Filtering source reliability weights to maximize objectivity..."
+    ];
+
+    const interval = setInterval(() => {
+      let pool = generalThoughts;
+      if (activeAgent === 'Teaching') pool = teachingThoughts;
+      else if (activeAgent === 'Coding') pool = codingThoughts;
+      else if (activeAgent === 'Business') pool = businessThoughts;
+      else if (activeAgent === 'Creative') pool = creativeThoughts;
+      else if (activeAgent === 'Research') pool = researchThoughts;
+
+      // Select random thought
+      const randomT = pool[Math.floor(Math.random() * pool.length)];
+      setCurrentThought(randomT);
+      setActiveThoughts(prev => [randomT, ...prev.slice(0, 49)]); // keep last 50 thoughts
+    }, 6000);
+
+    return () => clearInterval(interval);
+  }, [isLiveConsciousness, activeAgent]);
+
+  // Stop reading if component unmounts or chat ID changes
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis.cancel();
+    };
+  }, [currentChatId]);
 
   // Monitor and catch Progressive Web App install prompt
   useEffect(() => {
@@ -82,13 +181,85 @@ export default function App() {
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (u) => {
-      setUser(u);
+      // Don't override guest user state if they are in guest mode
+      if (u) {
+        setUser(u);
+      }
     });
     return () => unsubAuth();
   }, []);
 
+  const addChatMessage = async (msgData: {
+    role: 'user' | 'assistant';
+    content: string;
+    agent?: string;
+    imageUrl?: string;
+    multimodal?: boolean;
+    chatId?: string;
+    metacognition?: any;
+  }) => {
+    if (!user) return null;
+    
+    const targetChatId = msgData.chatId || currentChatId;
+    const msgObj: any = {
+      userId: user.uid,
+      chatId: targetChatId,
+      role: msgData.role,
+      content: msgData.content,
+      agent: msgData.agent || activeAgent,
+      timestamp: serverTimestamp(),
+      ...(msgData.imageUrl && { imageUrl: msgData.imageUrl }),
+      ...(msgData.multimodal && { multimodal: msgData.multimodal }),
+      ...(msgData.metacognition && { metacognition: msgData.metacognition })
+    };
+
+    if (user.uid === 'guest') {
+      const localMsgObj = {
+        ...msgObj,
+        id: Math.random().toString(36).substring(7),
+        timestamp: { seconds: Math.floor(Date.now() / 1000) }
+      };
+
+      const storedAllMsgs = localStorage.getItem('guest_messages_all');
+      let currentAll: ChatMessage[] = [];
+      if (storedAllMsgs) {
+        try {
+          currentAll = JSON.parse(storedAllMsgs);
+        } catch (e) {
+          currentAll = [];
+        }
+      }
+
+      const updatedAllMessages = [...currentAll, localMsgObj as any];
+      setAllMessages(updatedAllMessages);
+
+      const filtered = updatedAllMessages.filter(m => m.chatId === targetChatId);
+      setMessages(filtered);
+
+      localStorage.setItem('guest_messages_all', JSON.stringify(updatedAllMessages));
+      return localMsgObj;
+    } else {
+      return await addDoc(collection(db, 'messages'), msgObj);
+    }
+  };
+
   useEffect(() => {
     if (user) {
+      if (user.uid === 'guest') {
+        const storedAllMsgs = localStorage.getItem('guest_messages_all');
+        let parsedAll: ChatMessage[] = [];
+        if (storedAllMsgs) {
+          try {
+            parsedAll = JSON.parse(storedAllMsgs);
+          } catch (e) {
+            parsedAll = [];
+          }
+        }
+        setAllMessages(parsedAll);
+        setMessages(parsedAll.filter(m => m.chatId === currentChatId));
+        return;
+      }
+
       // Fetch ALL messages for search and history
       const qAll = query(
         collection(db, 'messages'),
@@ -126,6 +297,7 @@ export default function App() {
   }, [messages]);
 
   const handleLogin = async () => {
+    setAuthError(null);
     try {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
@@ -140,11 +312,19 @@ export default function App() {
         return;
       }
       if (error?.code === 'auth/popup-blocked') {
-        alert("The sign-in popup was blocked by your browser. Please disable your pop-up blocker and try again.");
+        setAuthError("The sign-in popup was blocked by your browser. Please disable your pop-up blocker and try again.");
         return;
       }
       console.error("Firebase Authentication Error:", error);
-      alert("Authentication failed: " + (error?.message || error));
+      const isUnauthDomain = error?.code === 'auth/unauthorized-domain' || 
+                             error?.message?.includes('unauthorized-domain') ||
+                             error?.code === 'auth/unauthorized-auth-domain' ||
+                             error?.message?.includes('unauthorized-auth-domain');
+      if (isUnauthDomain) {
+        setAuthError("unauthorized-domain");
+      } else {
+        setAuthError("Authentication failed: " + (error?.message || error));
+      }
     }
   };
 
@@ -165,11 +345,123 @@ export default function App() {
     recognition.start();
   };
 
-  const handleSpeech = (text: string) => {
+  const handleSpeech = (msgId: string, text: string) => {
     if (!text) return;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = language === 'en' ? 'en-US' : 'sw-KE';
-    window.speechSynthesis.speak(utterance);
+
+    if (speakingMsgId === msgId) {
+      window.speechSynthesis.cancel();
+      setSpeakingMsgId(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    // Remove markdown symbols for clean reading
+    let cleanText = text.replace(/[*_#`~>]/g, '').trim();
+    // Safely bypass large system console logs or block triggers so speech feels conversational
+    cleanText = cleanText.replace(/```[\s\S]*?```/g, '[code block omitted]');
+
+    if (!cleanText) return;
+
+    // Brief timeout ensures browsers have fully canceled preceding speech queues
+    setTimeout(() => {
+      try {
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        
+        // Dynamic search for premium natural-sounding voice
+        const voices = window.speechSynthesis.getVoices();
+        const preferredLang = language === 'en' ? 'en' : 'sw';
+        const filteredVoices = voices.filter(v => v.lang.toLowerCase().startsWith(preferredLang));
+
+        let bestVoice: SpeechSynthesisVoice | null = null;
+        if (filteredVoices.length > 0) {
+          const scored = filteredVoices.map(v => {
+            const name = v.name.toLowerCase();
+            let score = 0;
+
+            // Prioritize high-quality natural/neural/online speech engines
+            if (name.includes('natural') || name.includes('neural')) score += 100;
+            if (name.includes('online')) score += 80;
+            if (name.includes('google')) score += 50;
+            if (name.includes('siri')) score += 45;
+            if (name.includes('apple')) score += 30;
+            if (name.includes('premium')) score += 25;
+
+            // Target physical gender markers
+            const isMasculine = 
+              name.includes('male') || 
+              name.includes('david') || 
+              name.includes('guy') || 
+              name.includes('george') || 
+              name.includes('mark') || 
+              name.includes('daniel') || 
+              name.includes('steve') || 
+              name.includes('thomas') ||
+              name.includes('richard') ||
+              name.includes('ravi') ||
+              name.includes('james');
+
+            const isFeminine = 
+              name.includes('female') || 
+              name.includes('zira') || 
+              name.includes('aria') || 
+              name.includes('samantha') || 
+              name.includes('susan') || 
+              name.includes('hazel') || 
+              name.includes('melina') || 
+              name.includes('siri') ||
+              name.includes('karen') ||
+              name.includes('clara') ||
+              name.includes('veena') ||
+              name.includes('tessa') ||
+              name.includes('moira') ||
+              name.includes('mary');
+
+            if (voiceGender === 'masculine') {
+              if (isMasculine) score += 40;
+              else if (isFeminine) score -= 40;
+            } else {
+              if (isFeminine) score += 40;
+              else if (isMasculine) score -= 40;
+            }
+
+            return { voice: v, score };
+          });
+
+          scored.sort((a, b) => b.score - a.score);
+          bestVoice = scored[0].voice;
+        }
+
+        if (bestVoice) {
+          utterance.voice = bestVoice;
+        } else {
+          utterance.lang = language === 'en' ? 'en-US' : 'sw-KE';
+        }
+
+        // Human-like rhythm configuration
+        utterance.rate = 0.95; // Conversational, well-paced flow (mimicing ChatGPT)
+        utterance.pitch = voiceGender === 'masculine' ? 0.92 : 1.05; // Deeper resonant male, brighter clear female
+        utterance.volume = 1.0;
+
+        utterance.onstart = () => {
+          setSpeakingMsgId(msgId);
+        };
+
+        utterance.onend = () => {
+          setSpeakingMsgId(null);
+        };
+
+        utterance.onerror = (err) => {
+          console.warn("Speech Synthesis error/cancelled:", err);
+          setSpeakingMsgId(null);
+        };
+
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.error("Speech Synthesis failed:", err);
+        setSpeakingMsgId(null);
+      }
+    }, 50);
   };
 
   const handleDownload = (url: string, filename: string = 'charles-ai-creation.png') => {
@@ -195,16 +487,19 @@ export default function App() {
     setIsGeneratingImage(true);
 
     try {
+      if (isLiveConsciousness) {
+        const initialThought = `Synthesizing creative layout blueprint: "${prompt.slice(0, 30)}..." in ${style} format...`;
+        setCurrentThought(initialThought);
+        setActiveThoughts(prev => [initialThought, ...prev]);
+      }
+
       // Save user message
-      await addDoc(collection(db, 'messages'), {
-        userId: user.uid,
-        chatId: currentChatId,
+      await addChatMessage({
         role: 'user',
         content: imageToEdit 
           ? `Edit this image: ${prompt}` 
           : `Generate a ${style} ${ratio} ${format.toUpperCase()} image: ${prompt}`,
         agent: 'Creative',
-        timestamp: serverTimestamp(),
       });
 
       let response;
@@ -225,6 +520,22 @@ export default function App() {
         });
       }
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errMsg = `Server returned status ${response.status}`;
+        try {
+          const parsed = JSON.parse(errorText);
+          errMsg = parsed.error || errMsg;
+        } catch (_) {
+          if (errorText.includes("PayloadTooLargeError") || errorText.includes("too large")) {
+            errMsg = "The payload is too large. Please use a smaller file/image.";
+          } else {
+            errMsg = errorText.slice(0, 150) || errMsg;
+          }
+        }
+        throw new Error(errMsg);
+      }
+
       const data = await response.json();
 
       if (data.error) {
@@ -232,29 +543,45 @@ export default function App() {
       }
 
       // Save AI message with the image
-      await addDoc(collection(db, 'messages'), {
-        userId: user.uid,
-        chatId: currentChatId,
+      if (isLiveConsciousness) {
+        const successThought = `Creative design generated. Decoded image representation and loaded payload.`;
+        setCurrentThought(successThought);
+        setActiveThoughts(prev => [successThought, ...prev]);
+      }
+
+      const savedMsgObj = await addChatMessage({
         role: 'assistant',
         content: data.enhancedPrompt 
           ? `Engineered Prompt: ${data.enhancedPrompt}` 
           : `Processed your creative request.`,
         imageUrl: data.imageUrl,
         agent: 'Creative',
-        timestamp: serverTimestamp(),
       });
+
+      if (autoReadAloud && savedMsgObj) {
+        const msgId = 'id' in savedMsgObj ? (savedMsgObj as any).id : (savedMsgObj as any).id;
+        const msgText = data.enhancedPrompt 
+          ? `Engineered Prompt: ${data.enhancedPrompt}` 
+          : `Processed your creative request.`;
+        if (msgId) {
+          handleSpeech(msgId, msgText);
+        }
+      }
 
       setEditingImage(null);
 
     } catch (error: any) {
       console.error(error);
-      await addDoc(collection(db, 'messages'), {
-        userId: user.uid,
-        chatId: currentChatId,
+      if (isLiveConsciousness) {
+        const errorThought = `Creative generation pipeline failed. Vector matrix initialization failure.`;
+        setCurrentThought(errorThought);
+        setActiveThoughts(prev => [errorThought, ...prev]);
+      }
+
+      await addChatMessage({
         role: 'assistant',
         content: `⚠️ Creative Engine Error: ${error.message || "Could not complete image generation. Please make sure the server is healthy and try again."}`,
         agent: 'Creative',
-        timestamp: serverTimestamp(),
       });
     } finally {
       setIsProcessing(false);
@@ -272,14 +599,17 @@ export default function App() {
     setIsProcessing(true);
 
     try {
+      if (isLiveConsciousness) {
+        const initialThought = `Processing request: "${userText.slice(0, 30)}..." - Aligning with ${currentAgent} parameters...`;
+        setCurrentThought(initialThought);
+        setActiveThoughts(prev => [initialThought, ...prev]);
+      }
+
       // Save user message
-      await addDoc(collection(db, 'messages'), {
-        userId: user.uid,
-        chatId: currentChatId,
+      await addChatMessage({
         role: 'user',
         content: userText,
         agent: currentAgent,
-        timestamp: serverTimestamp(),
       });
 
       // Fetch AI response
@@ -289,9 +619,26 @@ export default function App() {
         body: JSON.stringify({ 
           message: userText,
           agentType: currentAgent,
-          history: messages.map(m => ({ role: m.role, parts: [{ text: m.content }] }))
+          history: messages.map(m => ({ role: m.role, parts: [{ text: m.content }] })),
+          enableMetacognition: useMetacognition
         }),
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errMsg = `Server returned status ${response.status}`;
+        try {
+          const parsed = JSON.parse(errorText);
+          errMsg = parsed.error || errMsg;
+        } catch (_) {
+          if (errorText.includes("PayloadTooLargeError") || errorText.includes("too large")) {
+            errMsg = "The payload is too large. Please use a smaller file/image.";
+          } else {
+            errMsg = errorText.slice(0, 150) || errMsg;
+          }
+        }
+        throw new Error(errMsg);
+      }
 
       const data = await response.json();
 
@@ -299,25 +646,40 @@ export default function App() {
         throw new Error(data.error);
       }
 
-      // Save AI message with a fallback for text
-      await addDoc(collection(db, 'messages'), {
-        userId: user.uid,
-        chatId: currentChatId,
+      if (isLiveConsciousness) {
+        const successThought = `${currentAgent} formulated response successfully. Calibrated content generation parameters.`;
+        setCurrentThought(successThought);
+        setActiveThoughts(prev => [successThought, ...prev]);
+      }
+
+      // Save AI message with a fallback for text and custom metacognition data
+      const savedMsgObj = await addChatMessage({
         role: 'assistant',
         content: data.text || "Charles encountered an error generating a response.",
         agent: data.agent || currentAgent,
-        timestamp: serverTimestamp(),
+        metacognition: data.metacognition
       });
+
+      if (autoReadAloud && savedMsgObj) {
+        const msgId = 'id' in savedMsgObj ? (savedMsgObj as any).id : (savedMsgObj as any).id;
+        const msgText = data.text || "Charles encountered an error generating a response.";
+        if (msgId) {
+          handleSpeech(msgId, msgText);
+        }
+      }
 
     } catch (error: any) {
       console.error(error);
-      await addDoc(collection(db, 'messages'), {
-        userId: user.uid,
-        chatId: currentChatId,
+      if (isLiveConsciousness) {
+        const errorThought = `Subconscious synapse failure when consulting ${currentAgent}. Connection lost or key invalid.`;
+        setCurrentThought(errorThought);
+        setActiveThoughts(prev => [errorThought, ...prev]);
+      }
+
+      await addChatMessage({
         role: 'assistant',
         content: `⚠️ Connection Error: Failed to reach Charles AI. Please ensure your GEMINI_API_KEY is configured on the server. (Detail: ${error.message || error})`,
         agent: currentAgent,
-        timestamp: serverTimestamp(),
       });
     } finally {
       setIsProcessing(false);
@@ -333,13 +695,10 @@ export default function App() {
       const base64 = (reader.result as string).split(',')[1];
       setIsProcessing(true);
       try {
-        await addDoc(collection(db, 'messages'), {
-          userId: user.uid,
-          chatId: currentChatId,
+        await addChatMessage({
           role: 'user',
           content: "Analyzing image...",
           agent: activeAgent,
-          timestamp: serverTimestamp(),
           multimodal: true,
         });
 
@@ -348,20 +707,42 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: base64, mimeType: file.type }),
         });
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          let errMsg = `Server returned status ${res.status}`;
+          try {
+            const parsed = JSON.parse(errorText);
+            errMsg = parsed.error || errMsg;
+          } catch (_) {
+            if (errorText.includes("PayloadTooLargeError") || errorText.includes("too large")) {
+              errMsg = "The payload is too large. Please use a smaller file/image.";
+            } else {
+              errMsg = errorText.slice(0, 150) || errMsg;
+            }
+          }
+          throw new Error(errMsg);
+        }
+
         const data = await res.json();
 
         if (data.error) {
           throw new Error(data.error);
         }
 
-        await addDoc(collection(db, 'messages'), {
-          userId: user.uid,
-          chatId: currentChatId,
+        const savedMsgObj = await addChatMessage({
           role: 'assistant',
           content: data.text || "Charles's vision system encountered an issue.",
           agent: activeAgent,
-          timestamp: serverTimestamp(),
         });
+
+        if (autoReadAloud && savedMsgObj) {
+          const msgId = 'id' in savedMsgObj ? (savedMsgObj as any).id : (savedMsgObj as any).id;
+          const msgText = data.text || "Charles's vision system encountered an issue.";
+          if (msgId) {
+            handleSpeech(msgId, msgText);
+          }
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -398,16 +779,78 @@ export default function App() {
             <h1 className="text-5xl font-black tracking-tighter">CHARLES <span className="text-purple-500">AI</span></h1>
             <p className="text-gray-400 max-w-xs mx-auto">The Next-Generation Multi-Agent Assistant Optimized for You.</p>
           </div>
-          <button 
-            onClick={handleLogin}
-            className="group relative px-8 py-4 bg-white text-black font-bold rounded-2xl overflow-hidden hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.3)]"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-blue-500 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-500 opacity-20" />
-            <span className="relative flex items-center gap-2">
-              <User className="w-5 h-5" />
-              Initialize Charles
-            </span>
-          </button>
+          <div className="flex flex-col gap-3 max-w-xs mx-auto">
+            <button 
+              onClick={handleLogin}
+              className="group relative w-full px-8 py-4 bg-white text-black font-bold rounded-2xl overflow-hidden hover:scale-105 active:scale-95 transition-all shadow-[0_0_20px_rgba(255,255,255,0.3)]"
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-blue-500 translate-x-[-100%] group-hover:translate-x-0 transition-transform duration-500 opacity-20" />
+              <span className="relative flex items-center justify-center gap-2">
+                <User className="w-5 h-5" />
+                Initialize Charles (Google Auth)
+              </span>
+            </button>
+            <button 
+              onClick={() => setUser({ uid: 'guest', displayName: 'Guest Explorer', email: 'guest@charles.ai' } as any)}
+              className="group relative w-full px-8 py-4 bg-purple-900/40 hover:bg-purple-800/50 border border-purple-500/30 text-purple-300 hover:text-white font-bold rounded-2xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(168,85,247,0.15)]"
+            >
+              <span className="relative flex items-center justify-center gap-2">
+                <Sparkles className="w-5 h-5 animate-pulse" />
+                Continue as Guest (Local Mode)
+              </span>
+            </button>
+          </div>
+
+          {authError && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-6 p-5 bg-red-950/40 border border-red-500/20 text-left rounded-2xl max-w-sm mx-auto space-y-4 shadow-2xl backdrop-blur-md"
+            >
+              {authError === 'unauthorized-domain' ? (
+                <>
+                  <div className="flex items-center gap-2 text-red-400 font-bold text-sm">
+                    <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                    <span>Domain Blocked by Firebase</span>
+                  </div>
+                  <p className="text-[11px] text-gray-300 leading-relaxed">
+                    Firebase Authentication requires authorized domains for security. To sign in, you must add this workspace domain to your console settings.
+                  </p>
+                  <div className="bg-black/60 p-3 rounded-xl border border-white/5 space-y-1">
+                    <div className="text-[9px] text-gray-500 uppercase font-black">1. Copy this domain:</div>
+                    <div className="text-xs font-mono select-all bg-white/5 px-2 py-1.5 rounded text-purple-300 font-bold overflow-x-auto whitespace-nowrap">
+                      {window.location.hostname}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <a 
+                      href={`https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-center px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl text-xs hover:from-purple-500 hover:to-indigo-500 transition-all cursor-pointer shadow-lg shadow-purple-500/10"
+                    >
+                      2. Add to Firebase Console ➔
+                    </a>
+                    <div className="text-[9px] text-gray-400 leading-tight bg-white/5 p-2 rounded-lg space-y-1">
+                      <p>• Click the button above to open settings.</p>
+                      <p>• Select first tab: <strong>Authorized Domains</strong>.</p>
+                      <p>• Click <strong>Add Domain</strong> and paste the domain.</p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-red-400 font-bold text-xs">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                    <span>Authentication Error</span>
+                  </div>
+                  <p className="text-xs text-gray-300 font-mono break-words bg-black/40 p-2.5 rounded-lg border border-white/5">
+                    {authError}
+                  </p>
+                </div>
+              )}
+            </motion.div>
+          )}
         </motion.div>
       </div>
     );
@@ -648,12 +1091,12 @@ export default function App() {
 
             <div className="p-6 border-t border-white/5 mt-auto">
                <div className="flex items-center gap-3 mb-6 p-2 bg-white/5 rounded-2xl">
-                  <img src={user.photoURL || ''} className="w-10 h-10 rounded-xl" alt="Avatar" />
+                  <img src={user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&q=80'} className="w-10 h-10 rounded-xl" alt="Avatar" />
                   <div className="flex-1 min-w-0">
                      <p className="font-bold text-sm truncate">{user.displayName}</p>
-                     <p className="text-[10px] text-gray-500 truncate">V3.0 Enterprise</p>
+                     <p className="text-[10px] text-purple-400 font-bold truncate">{user.uid === 'guest' ? 'Local Guest Mode' : 'V3.0 Enterprise'}</p>
                   </div>
-                  <button onClick={() => auth.signOut()} className="p-2 hover:bg-red-500/20 rounded-lg group">
+                  <button onClick={() => { if (user.uid === 'guest') { setUser(null); } else { auth.signOut(); } }} className="p-2 hover:bg-red-500/20 rounded-lg group">
                      <LogOut className="w-4 h-4 text-gray-500 group-hover:text-red-400" />
                   </button>
                </div>
@@ -695,15 +1138,31 @@ export default function App() {
            
            <div className="flex items-center gap-4">
               <button 
+                onClick={() => setVoiceGender(v => v === 'masculine' ? 'feminine' : 'masculine')}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all group"
+                title="Switch speech voice between Masculine and Feminine"
+              >
+                 <Volume2 className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
+                 <span className="text-[10px] font-black uppercase tracking-widest">{voiceGender === 'masculine' ? 'Voice: Masculine' : 'Voice: Feminine'}</span>
+              </button>
+              <button 
                 onClick={() => setLanguage(l => l === 'en' ? 'sw' : 'en')}
                 className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all group"
               >
                  <Globe className="w-4 h-4 text-blue-400 group-hover:rotate-12 transition-transform" />
                  <span className="text-[10px] font-black uppercase tracking-widest">{language === 'en' ? 'English' : 'Kiswahili'}</span>
               </button>
-              <div className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center gap-2">
-                 <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
-                 <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-[0.2em]">Live Consciousness</span>
+              <div className={`px-3 py-1.5 border rounded-full flex items-center gap-2 cursor-pointer transition-all hover:scale-105 active:scale-95 select-none ${autoReadAloud ? "bg-pink-500/15 border-pink-500/30 text-pink-400" : "bg-zinc-950 border-white/5 text-gray-400"}`} onClick={() => setAutoReadAloud(!autoReadAloud)} title="Toggle Auto Read Aloud for Incoming Messages">
+                 <Volume2 className={`w-3.5 h-3.5 ${autoReadAloud ? 'text-pink-400 animate-bounce' : 'text-gray-400'}`} />
+                 <span className={`text-[9px] font-bold uppercase tracking-[0.2em] ${autoReadAloud ? 'text-pink-400' : 'text-gray-400'}`}>{autoReadAloud ? 'Auto Read Active' : 'Auto Read Idle'}</span>
+              </div>
+              <div className={`px-3 py-1.5 border rounded-full flex items-center gap-2 cursor-pointer transition-all hover:scale-105 active:scale-95 select-none ${useMetacognition ? "bg-purple-500/15 border-purple-500/30 text-purple-400" : "bg-zinc-950 border-white/5 text-gray-400"}`} onClick={() => setUseMetacognition(!useMetacognition)} title="Toggle Metacognition Engine">
+                 <Brain className={`w-3.5 h-3.5 ${useMetacognition ? 'text-purple-400 animate-pulse' : 'text-gray-400'}`} />
+                 <span className={`text-[9px] font-bold uppercase tracking-[0.2em] ${useMetacognition ? 'text-purple-400' : 'text-gray-400'}`}>{useMetacognition ? 'Metacognition Active' : 'Metacognition Idle'}</span>
+              </div>
+              <div className={`px-3 py-1.5 border rounded-full flex items-center gap-2 cursor-pointer transition-all hover:scale-105 active:scale-95 select-none ${isLiveConsciousness ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400" : "bg-zinc-950 border-white/5 text-gray-500"}`} onClick={() => setIsLiveConsciousness(!isLiveConsciousness)} title="Toggle Live Consciousness">
+                 <div className={`w-1.5 h-1.5 rounded-full ${isLiveConsciousness ? 'bg-emerald-400 animate-pulse' : 'bg-gray-500'}`}></div>
+                 <span className={`text-[9px] font-bold uppercase tracking-[0.2em] ${isLiveConsciousness ? 'text-emerald-400' : 'text-gray-500'}`}>{isLiveConsciousness ? 'Consciousness Active' : 'Consciousness Idle'}</span>
               </div>
            </div>
         </header>
@@ -792,6 +1251,9 @@ export default function App() {
                                </div>
                              )}
                              <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                             {msg.metacognition && (
+                               <MetacognitionWidget metacognition={msg.metacognition} />
+                             )}
                              {msg.imageUrl && (
                                <div className="mt-4 group relative rounded-xl overflow-hidden border border-white/10 bg-black/20">
                                   <img 
@@ -842,8 +1304,15 @@ export default function App() {
                              )}
                              {msg.role === 'assistant' && (
                                <div className="mt-4 flex gap-2">
-                                  <button onClick={() => handleSpeech(msg.content)} className="p-1.5 hover:bg-white/5 rounded-lg text-gray-500 hover:text-white">
-                                     <Volume2 className="w-4 h-4" />
+                                  <button onClick={() => handleSpeech(msg.id, msg.content)} className={`p-1.5 rounded-lg transition-all flex items-center justify-center gap-1.5 ${speakingMsgId === msg.id ? 'bg-purple-900/30 border border-purple-500/30 text-purple-300 hover:text-white font-bold' : 'hover:bg-white/5 text-gray-500 hover:text-white'}`} title={speakingMsgId === msg.id ? "Stop Reading" : "Read Aloud"}>
+                                     {speakingMsgId === msg.id ? (
+                                        <>
+                                           <VolumeX className="w-4 h-4 text-red-400" />
+                                           <span className="text-[10px]">Stop Speaking</span>
+                                        </>
+                                     ) : (
+                                        <Volume2 className="w-4 h-4" />
+                                     )}
                                   </button>
                                </div>
                              )}
@@ -933,6 +1402,28 @@ export default function App() {
                 </div>
               </div>
 
+              {isLiveConsciousness && (
+                <div className="px-6 py-2.5 bg-black/40 border-b border-white/5 flex items-center justify-between gap-3 text-[11px] font-mono group/thought select-none">
+                   <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className="relative flex-shrink-0 flex items-center">
+                         <Brain className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+                         <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>
+                      </div>
+                      <span className="text-gray-500 font-bold uppercase tracking-wider text-[9px] flex-shrink-0">Subconscious Loop:</span>
+                      <span className="text-purple-300/90 font-medium truncate animate-pulse" key={currentThought}>
+                         {currentThought}
+                      </span>
+                   </div>
+                   <button 
+                     type="button"
+                     onClick={() => setIsThoughtsConsoleOpen(true)}
+                     className="text-[9px] font-black uppercase tracking-wider text-purple-400 hover:text-white border border-purple-500/20 hover:border-purple-500/40 px-2 py-0.5 rounded bg-purple-500/5 transition-all flex-shrink-0"
+                   >
+                      Telemetry Console
+                   </button>
+                </div>
+              )}
+
               {editingImage && (
                 <div className="p-4 flex items-center gap-4 bg-purple-500/10 border-b border-white/5">
                    <div className="w-12 h-12 rounded-lg overflow-hidden border border-purple-500/50">
@@ -1020,6 +1511,91 @@ export default function App() {
               </div>
            </div>
         </div>
+      {/* Dynamic Telemetry Console Modal Overlay */}
+      <AnimatePresence>
+        {isThoughtsConsoleOpen && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+             <motion.div 
+               initial={{ scale: 0.95, opacity: 0 }}
+               animate={{ scale: 1, opacity: 1 }}
+               exit={{ scale: 0.95, opacity: 0 }}
+               className="bg-zinc-950 border border-white/10 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh] z-50 text-left"
+             >
+                <div className="p-6 border-b border-white/5 flex items-center justify-between bg-zinc-900/50">
+                   <div className="flex items-center gap-3">
+                      <Brain className="w-5 h-5 text-purple-400 animate-pulse" />
+                      <div>
+                         <h3 className="font-bold text-sm tracking-tight uppercase text-white">Charles Subconscious Telemetry</h3>
+                         <p className="text-[10px] text-gray-500 font-mono">ESTABLISHED STREAMS: nominal</p>
+                      </div>
+                   </div>
+                   <button 
+                     onClick={() => setIsThoughtsConsoleOpen(false)}
+                     className="text-gray-500 hover:text-white transition-colors p-1"
+                     title="Close telemetry"
+                   >
+                      <Plus className="w-5 h-5 rotate-45 transform" />
+                   </button>
+                </div>
+
+                <div className="p-6 bg-zinc-900/20 border-b border-white/5 grid grid-cols-3 gap-4 text-center font-mono text-[10px]">
+                   <div className="p-3 bg-zinc-900/50 border border-white/5 rounded-xl">
+                      <span className="block text-gray-500 text-[8px] uppercase font-bold tracking-wider mb-1">Neural Agent</span>
+                      <span className="font-bold text-purple-400">{activeAgent}</span>
+                   </div>
+                   <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-xl">
+                      <span className="block text-emerald-500/65 text-[8px] uppercase font-bold tracking-wider mb-1">Sync State</span>
+                      <span className="font-bold text-emerald-400 animate-pulse">CONNECTED</span>
+                   </div>
+                   <div className="p-3 bg-zinc-900/50 border border-white/5 rounded-xl">
+                      <span className="block text-gray-500 text-[8px] uppercase font-bold tracking-wider mb-1">Pulse Queue</span>
+                      <span className="font-bold text-gray-300">{activeThoughts.length} logs</span>
+                   </div>
+                </div>
+
+                {/* Subconscious Logs Panel */}
+                <div className="flex-1 overflow-y-auto p-6 font-mono text-[11px] space-y-2 bg-black max-h-[45vh] leading-relaxed no-scrollbar text-left scroll-smooth">
+                   {activeThoughts.length === 0 ? (
+                      <p className="text-gray-600 italic py-10 text-center select-none">No telemetry streams captured yet.</p>
+                   ) : (
+                      activeThoughts.map((thought, idx) => (
+                         <div key={idx} className="flex gap-3 hover:bg-white/5 py-1 px-2 rounded -mx-2 transition-colors">
+                            <span className="text-purple-500/85 flex-shrink-0 select-none">&gt;&gt;</span>
+                            <span className="text-gray-300/90 break-all">{thought}</span>
+                         </div>
+                      ))
+                   )}
+                </div>
+
+                {/* Footer Controls */}
+                <div className="p-4 bg-zinc-900/50 border-t border-white/5 flex items-center justify-between">
+                   <p className="text-[9px] text-gray-500 font-mono">
+                      Charles AI Subconscious Logging Console v2.5
+                   </p>
+                   <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setActiveThoughts([
+                            `[${new Date().toLocaleTimeString([], { hour12: false })}] Telemetry purged by operator.`,
+                            `[${new Date().toLocaleTimeString([], { hour12: false })}] Consciousness loop initialized.`
+                          ]);
+                        }}
+                        className="px-3 py-1.5 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all font-bold text-[10px] uppercase tracking-wide text-gray-400 hover:text-white"
+                      >
+                         Purge
+                      </button>
+                      <button
+                        onClick={() => setIsThoughtsConsoleOpen(false)}
+                        className="px-4 py-1.5 bg-white text-black rounded-xl hover:bg-gray-100 transition-all font-black text-[10px] uppercase tracking-wide shadow-lg"
+                      >
+                         Close
+                      </button>
+                   </div>
+                </div>
+             </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       </main>
     </div>
   );
