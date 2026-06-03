@@ -153,6 +153,51 @@ function parseMetacognition(text: string) {
   return { cleanedText, metacognition };
 }
 
+function sanitizeHistory(history: any[]) {
+  if (!history || !Array.isArray(history)) return [];
+
+  const sanitized: any[] = [];
+  
+  for (const item of history) {
+    if (!item) continue;
+    
+    const role = item.role === 'assistant' ? 'model' : item.role;
+    if (role !== 'user' && role !== 'model') continue;
+
+    let textContent = "";
+    if (Array.isArray(item.parts)) {
+      textContent = item.parts
+        .map((p: any) => p?.text || p || "")
+        .join("\n")
+        .trim();
+    } else if (typeof item.parts === "string") {
+      textContent = item.parts.trim();
+    } else if (item.content) {
+      textContent = String(item.content).trim();
+    }
+
+    if (!textContent) continue;
+
+    const parts = [{ text: textContent }];
+
+    if (sanitized.length === 0) {
+      // Must start with user turn!
+      if (role === 'user') {
+        sanitized.push({ role, parts });
+      }
+    } else {
+      const last = sanitized[sanitized.length - 1];
+      if (last.role === role) {
+        last.parts[0].text += "\n" + textContent;
+      } else {
+        sanitized.push({ role, parts });
+      }
+    }
+  }
+
+  return sanitized;
+}
+
 app.post("/api/charles/chat", async (req, res) => {
   try {
     const { message, history, agentType, enableMetacognition } = req.body;
@@ -166,20 +211,22 @@ app.post("/api/charles/chat", async (req, res) => {
       ? baseInstruction + METACOGNITION_INSTRUCTION 
       : baseInstruction;
 
+    const sanitized = sanitizeHistory(history || []);
+    sanitized.push({
+      role: "user",
+      parts: [{ text: message || "" }]
+    });
+
     try {
-      const chat = getAI().chats.create({
-        model: primaryModel, 
+      const response = await retryWithDelay(() => getAI().models.generateContent({
+        model: primaryModel,
+        contents: sanitized,
         config: {
           systemInstruction: systemInstruction,
-        },
-        history: (history || []).map((item: any) => ({
-          role: item.role === 'assistant' ? 'model' : item.role,
-          parts: item.parts
-        }))
-      });
+        }
+      }));
 
-      const response = await retryWithDelay(() => chat.sendMessage({ message }));
-      const { cleanedText, metacognition } = parseMetacognition(response.text);
+      const { cleanedText, metacognition } = parseMetacognition(response.text || "");
       
       return res.json({ 
         text: cleanedText,
@@ -189,19 +236,15 @@ app.post("/api/charles/chat", async (req, res) => {
     } catch (primaryErr: any) {
       console.warn(`Primary model (${primaryModel}) failed or is unavailable. Attempting fallback to ${fallbackModel}:`, primaryErr.message || primaryErr);
       
-      const chatFallback = getAI().chats.create({
-        model: fallbackModel, 
+      const responseFallback = await retryWithDelay(() => getAI().models.generateContent({
+        model: fallbackModel,
+        contents: sanitized,
         config: {
           systemInstruction: systemInstruction,
-        },
-        history: (history || []).map((item: any) => ({
-          role: item.role === 'assistant' ? 'model' : item.role,
-          parts: item.parts
-        }))
-      });
+        }
+      }));
 
-      const responseFallback = await retryWithDelay(() => chatFallback.sendMessage({ message }));
-      const { cleanedText, metacognition } = parseMetacognition(responseFallback.text);
+      const { cleanedText, metacognition } = parseMetacognition(responseFallback.text || "");
       
       return res.json({ 
         text: cleanedText,
@@ -211,7 +254,10 @@ app.post("/api/charles/chat", async (req, res) => {
     }
   } catch (error: any) {
     console.error("Charles chat error:", error);
-    res.status(500).json({ error: "Charles encountered a cosmic glitch. The mind was temporarily overloaded." });
+    res.status(500).json({ 
+      error: "Charles encountered a cosmic glitch. The mind was temporarily overloaded.",
+      details: error?.message || String(error)
+    });
   }
 });
 
