@@ -33,7 +33,7 @@ function getAI(): GoogleGenAI {
   return aiInstance;
 }
 
-async function retryWithDelay<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): Promise<T> {
+async function retryWithDelay<T>(fn: () => Promise<T>, retries = 4, delayMs = 1000): Promise<T> {
   let attempt = 0;
   while (true) {
     try {
@@ -236,21 +236,45 @@ app.post("/api/charles/chat", async (req, res) => {
     } catch (primaryErr: any) {
       console.warn(`Primary model (${primaryModel}) failed or is unavailable. Attempting fallback to ${fallbackModel}:`, primaryErr.message || primaryErr);
       
-      const responseFallback = await retryWithDelay(() => getAI().models.generateContent({
-        model: fallbackModel,
-        contents: sanitized,
-        config: {
-          systemInstruction: systemInstruction,
-        }
-      }));
+      try {
+        const responseFallback = await retryWithDelay(() => getAI().models.generateContent({
+          model: fallbackModel,
+          contents: sanitized,
+          config: {
+            systemInstruction: systemInstruction,
+          }
+        }));
 
-      const { cleanedText, metacognition } = parseMetacognition(responseFallback.text || "");
-      
-      return res.json({ 
-        text: cleanedText,
-        agent: agentType || "General",
-        metacognition: metacognition
-      });
+        const { cleanedText, metacognition } = parseMetacognition(responseFallback.text || "");
+        
+        return res.json({ 
+          text: cleanedText,
+          agent: agentType || "General",
+          metacognition: metacognition
+        });
+      } catch (fallbackErr: any) {
+        console.warn(`Fallback model (${fallbackModel}) failed as well. Attempting tertiary fallback to gemini-flash-latest:`, fallbackErr.message || fallbackErr);
+        
+        try {
+          const responseTertiary = await retryWithDelay(() => getAI().models.generateContent({
+            model: "gemini-flash-latest",
+            contents: sanitized,
+            config: {
+              systemInstruction: systemInstruction,
+            }
+          }));
+
+          const { cleanedText, metacognition } = parseMetacognition(responseTertiary.text || "");
+          
+          return res.json({ 
+            text: cleanedText,
+            agent: agentType || "General",
+            metacognition: metacognition
+          });
+        } catch (finalErr: any) {
+          throw finalErr;
+        }
+      }
     }
   } catch (error: any) {
     console.error("Charles chat error:", error);
@@ -284,20 +308,38 @@ app.post("/api/charles/analyze", async (req, res) => {
       }));
     } catch (primaryErr: any) {
       console.warn("Vision primary model failed/unavailable, attempting fallback:", primaryErr.message || primaryErr);
-      response = await retryWithDelay(() => getAI().models.generateContent({
-        model: "gemini-3.1-flash-lite",
-        contents: {
-          parts: [
-            { text: prompt || "Analyze this image in the context of Charles's expertise." },
-            {
-              inlineData: {
-                data: image, // Base64
-                mimeType: mimeType || "image/jpeg"
+      try {
+        response = await retryWithDelay(() => getAI().models.generateContent({
+          model: "gemini-3.1-flash-lite",
+          contents: {
+            parts: [
+              { text: prompt || "Analyze this image in the context of Charles's expertise." },
+              {
+                inlineData: {
+                  data: image, // Base64
+                  mimeType: mimeType || "image/jpeg"
+                }
               }
-            }
-          ]
-        }
-      }));
+            ]
+          }
+        }));
+      } catch (fallbackErr: any) {
+        console.warn("Vision secondary model failed, attempting tertiary fallback:", fallbackErr.message || fallbackErr);
+        response = await retryWithDelay(() => getAI().models.generateContent({
+          model: "gemini-flash-latest",
+          contents: {
+            parts: [
+              { text: prompt || "Analyze this image in the context of Charles's expertise." },
+              {
+                inlineData: {
+                  data: image, // Base64
+                  mimeType: mimeType || "image/jpeg"
+                }
+              }
+            ]
+          }
+        }));
+      }
     }
     
     res.json({ text: response.text });
@@ -327,19 +369,36 @@ async function enhancePrompt(prompt: string, style: string = "general") {
       }));
     } catch (primaryErr: any) {
       console.warn("Enhance prompt primary model failed/unavailable, attempting fallback:", primaryErr.message || primaryErr);
-      response = await retryWithDelay(() => getAI().models.generateContent({
-        model: "gemini-3.1-flash-lite",
-        contents: [{
-          role: "user",
-          parts: [{
-            text: `Act as an expert AI prompt engineer. 
-            Enhance the following user prompt for a ${style} style image generation. 
-            Respond ONLY with the final enhanced prompt. 
-            Keep it high-detail, descriptive, and creative.
-            User Prompt: ${prompt}`
+      try {
+        response = await retryWithDelay(() => getAI().models.generateContent({
+          model: "gemini-3.1-flash-lite",
+          contents: [{
+            role: "user",
+            parts: [{
+              text: `Act as an expert AI prompt engineer. 
+              Enhance the following user prompt for a ${style} style image generation. 
+              Respond ONLY with the final enhanced prompt. 
+              Keep it high-detail, descriptive, and creative.
+              User Prompt: ${prompt}`
+            }]
           }]
-        }]
-      }));
+        }));
+      } catch (fallbackErr: any) {
+        console.warn("Enhance prompt secondary model failed/unavailable, attempting tertiary fallback:", fallbackErr.message || fallbackErr);
+        response = await retryWithDelay(() => getAI().models.generateContent({
+          model: "gemini-flash-latest",
+          contents: [{
+            role: "user",
+            parts: [{
+              text: `Act as an expert AI prompt engineer. 
+              Enhance the following user prompt for a ${style} style image generation. 
+              Respond ONLY with the final enhanced prompt. 
+              Keep it high-detail, descriptive, and creative.
+              User Prompt: ${prompt}`
+            }]
+          }]
+        }));
+      }
     }
     return response.text;
   } catch (err) {
