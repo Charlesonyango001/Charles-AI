@@ -1103,26 +1103,26 @@ export default function App() {
       {/* Main Interaction Area */}
       <main className="flex-1 flex flex-col relative overflow-hidden bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
         {/* Header */}
-        <header className="h-20 border-b border-white/5 flex items-center justify-between px-8 bg-black/50 backdrop-blur-md z-40">
-           <div className="flex items-center gap-4">
+        <header className="h-14 border-b border-white/5 flex items-center justify-between px-4 md:px-6 bg-black/50 backdrop-blur-md z-40 select-none">
+           <div className="flex items-center gap-3 min-w-0">
               {!showDashboard && (
-                <button onClick={() => setShowDashboard(true)} className="p-2 hover:bg-white/5 rounded-xl transition-colors">
-                  <LayoutDashboard className="w-5 h-5 text-gray-400 hover:text-white" />
+                <button onClick={() => setShowDashboard(true)} className="p-1.5 hover:bg-white/5 rounded-lg transition-colors shrink-0">
+                  <LayoutDashboard className="w-4 h-4 text-gray-400 hover:text-white" />
                 </button>
               )}
-              <div className="flex items-center gap-3">
-                 <h1 className="font-black text-2xl tracking-tighter">CHARLES <span className="text-purple-500">AI</span></h1>
-                 <div className="h-4 w-px bg-white/10"></div>
-                 <div className="flex items-center gap-4 text-xs font-bold text-gray-500 uppercase tracking-widest overflow-x-auto no-scrollbar max-w-[400px]">
+              <div className="flex items-center gap-2.5 min-w-0">
+                 <h1 className="font-black text-sm tracking-tighter shrink-0">CHARLES <span className="text-purple-500">AI</span></h1>
+                 <div className="h-4 w-px bg-white/10 shrink-0"></div>
+                 <div className="flex items-center gap-1 md:gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-widest overflow-x-auto no-scrollbar max-w-[120px] xs:max-w-[200px] sm:max-w-[320px] md:max-w-[400px] py-1">
                     {AGENTS.map(agent => (
                       <button 
                         key={agent.id}
                         onClick={() => setActiveAgent(agent.id)}
-                        className={`transition-all whitespace-nowrap px-3 py-1 rounded-full ${activeAgent === agent.id ? 'text-white bg-white/10 border border-white/10 shadow-[0_0_10px_rgba(255,255,255,0.1)]' : 'hover:text-gray-300'}`}
+                        className={`transition-all whitespace-nowrap px-2 py-0.5 md:px-2.5 md:py-1 rounded-full text-[9px] md:text-[10px] font-black ${activeAgent === agent.id ? 'text-white bg-white/10 border border-white/10 shadow-[0_0_10px_rgba(255,255,255,0.1)]' : 'text-gray-400 hover:text-gray-200'}`}
                       >
-                         <span className="flex items-center gap-2">
-                           <agent.icon className={`w-3 h-3 ${activeAgent === agent.id ? 'text-purple-400' : ''}`} />
-                           {agent.label}
+                         <span className="flex items-center gap-1 md:gap-1.5">
+                           <agent.icon className={`w-2.5 h-2.5 md:w-3 md:h-3 ${activeAgent === agent.id ? 'text-purple-400' : ''}`} />
+                           <span>{agent.label.replace('Charles ', '').replace(' Charles', '')}</span>
                          </span>
                       </button>
                     ))}
@@ -1130,33 +1130,60 @@ export default function App() {
               </div>
            </div>
            
-           <div className="flex items-center gap-4">
+           <div className="flex items-center gap-1.5 md:gap-2 overflow-x-auto no-scrollbar max-w-[55%] sm:max-w-none">
               <button 
                 onClick={() => setVoiceGender(v => v === 'masculine' ? 'feminine' : 'masculine')}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all group"
+                className="flex items-center gap-1 px-1.5 py-1 md:px-2 md:py-1 bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-all group shrink-0"
                 title="Switch speech voice between Masculine and Feminine"
               >
-                 <Volume2 className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
-                 <span className="text-[10px] font-black uppercase tracking-widest">{voiceGender === 'masculine' ? 'Voice: Masculine' : 'Voice: Feminine'}</span>
+                 <Volume2 className="w-3 h-3 text-purple-400 group-hover:scale-110 transition-transform" />
+                 <span className="text-[9px] font-black uppercase tracking-wider text-zinc-300">
+                    <span className="hidden sm:inline">Voice: </span>
+                    <span>{voiceGender === 'masculine' ? 'Masc' : 'Fem'}</span>
+                 </span>
               </button>
               <button 
                 onClick={() => setLanguage(l => l === 'en' ? 'sw' : 'en')}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all group"
+                className="flex items-center gap-1 px-1.5 py-1 md:px-2 md:py-1 bg-white/5 border border-white/5 rounded-lg hover:bg-white/10 transition-all group shrink-0"
+                title="Toggle Language"
               >
-                 <Globe className="w-4 h-4 text-blue-400 group-hover:rotate-12 transition-transform" />
-                 <span className="text-[10px] font-black uppercase tracking-widest">{language === 'en' ? 'English' : 'Kiswahili'}</span>
+                 <Globe className="w-3 h-3 text-blue-400 group-hover:rotate-12 transition-transform" />
+                 <span className="text-[9px] font-black uppercase tracking-wider text-zinc-300">
+                    {language === 'en' ? 'English' : 'Kiswahili'}
+                 </span>
               </button>
-              <div className={`px-3 py-1.5 border rounded-full flex items-center gap-2 cursor-pointer transition-all hover:scale-105 active:scale-95 select-none ${autoReadAloud ? "bg-pink-500/15 border-pink-500/30 text-pink-400" : "bg-zinc-950 border-white/5 text-gray-400"}`} onClick={() => setAutoReadAloud(!autoReadAloud)} title="Toggle Auto Read Aloud for Incoming Messages">
-                 <Volume2 className={`w-3.5 h-3.5 ${autoReadAloud ? 'text-pink-400 animate-bounce' : 'text-gray-400'}`} />
-                 <span className={`text-[9px] font-bold uppercase tracking-[0.2em] ${autoReadAloud ? 'text-pink-400' : 'text-gray-400'}`}>{autoReadAloud ? 'Auto Read Active' : 'Auto Read Idle'}</span>
+              <div 
+                className={`px-1.5 py-1 md:px-2 md:py-1 border rounded-lg flex items-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 select-none shrink-0 ${autoReadAloud ? "bg-pink-500/15 border-pink-500/30 text-pink-400" : "bg-zinc-950 border-white/5 text-gray-400"}`} 
+                onClick={() => setAutoReadAloud(!autoReadAloud)} 
+                title="Toggle Auto Read Aloud for Incoming Messages"
+              >
+                 <Volume2 className={`w-3 h-3 ${autoReadAloud ? 'text-pink-400 animate-bounce' : 'text-gray-400'}`} />
+                 <span className="text-[9px] font-bold uppercase tracking-wider">
+                    <span className="hidden md:inline">{autoReadAloud ? 'Auto Read Active' : 'Auto Read Idle'}</span>
+                    <span className="md:hidden">Read</span>
+                 </span>
               </div>
-              <div className={`px-3 py-1.5 border rounded-full flex items-center gap-2 cursor-pointer transition-all hover:scale-105 active:scale-95 select-none ${useMetacognition ? "bg-purple-500/15 border-purple-500/30 text-purple-400" : "bg-zinc-950 border-white/5 text-gray-400"}`} onClick={() => setUseMetacognition(!useMetacognition)} title="Toggle Metacognition Engine">
-                 <Brain className={`w-3.5 h-3.5 ${useMetacognition ? 'text-purple-400 animate-pulse' : 'text-gray-400'}`} />
-                 <span className={`text-[9px] font-bold uppercase tracking-[0.2em] ${useMetacognition ? 'text-purple-400' : 'text-gray-400'}`}>{useMetacognition ? 'Metacognition Active' : 'Metacognition Idle'}</span>
+              <div 
+                className={`px-1.5 py-1 md:px-2 md:py-1 border rounded-lg flex items-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 select-none shrink-0 ${useMetacognition ? "bg-purple-500/15 border-purple-500/30 text-purple-400" : "bg-zinc-950 border-white/5 text-gray-400"}`} 
+                onClick={() => setUseMetacognition(!useMetacognition)} 
+                title="Toggle Metacognition Engine"
+              >
+                 <Brain className={`w-3 h-3 ${useMetacognition ? 'text-purple-400 animate-pulse' : 'text-gray-400'}`} />
+                 <span className="text-[9px] font-bold uppercase tracking-wider">
+                    <span className="hidden md:inline">{useMetacognition ? 'Metacognition Active' : 'Metacognition Idle'}</span>
+                    <span className="md:hidden">Meta</span>
+                 </span>
               </div>
-              <div className={`px-3 py-1.5 border rounded-full flex items-center gap-2 cursor-pointer transition-all hover:scale-105 active:scale-95 select-none ${isLiveConsciousness ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400" : "bg-zinc-950 border-white/5 text-gray-500"}`} onClick={() => setIsLiveConsciousness(!isLiveConsciousness)} title="Toggle Live Consciousness">
+              <div 
+                className={`px-1.5 py-1 md:px-2 md:py-1 border rounded-lg flex items-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 select-none shrink-0 ${isLiveConsciousness ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400" : "bg-zinc-950 border-white/5 text-gray-500"}`} 
+                onClick={() => setIsLiveConsciousness(!isLiveConsciousness)} 
+                title="Toggle Live Consciousness"
+              >
                  <div className={`w-1.5 h-1.5 rounded-full ${isLiveConsciousness ? 'bg-emerald-400 animate-pulse' : 'bg-gray-500'}`}></div>
-                 <span className={`text-[9px] font-bold uppercase tracking-[0.2em] ${isLiveConsciousness ? 'text-emerald-400' : 'text-gray-500'}`}>{isLiveConsciousness ? 'Consciousness Active' : 'Consciousness Idle'}</span>
+                 <span className="text-[9px] font-bold uppercase tracking-wider">
+                    <span className="hidden md:inline">{isLiveConsciousness ? 'Consciousness Active' : 'Consciousness Idle'}</span>
+                    <span className="md:hidden">Conscious</span>
+                 </span>
               </div>
            </div>
         </header>
@@ -1198,25 +1225,29 @@ export default function App() {
                       </div>
                    </div>
                    <div className="space-y-4">
-                      <h2 className="text-5xl font-black tracking-tighter bg-gradient-to-r from-white via-white to-gray-500 bg-clip-text text-transparent">
+                      <h2 className="text-2xl md:text-3xl font-black tracking-tight bg-gradient-to-r from-white via-white to-gray-400 bg-clip-text text-transparent">
                         Niaje? Mimi ni Charles.
                       </h2>
-                      <p className="text-gray-500 text-lg max-w-lg mx-auto">
+                      <p className="text-zinc-400 text-xs md:text-sm max-w-md mx-auto leading-relaxed">
                         Your futuristic multi-agent assistant for sub-Saharan Africa and the global stage. 
                         I speak English, Swahili, and Sheng.
                       </p>
                    </div>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl">
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl mx-auto px-4">
                       {[
                         { title: "Study Plans", desc: "Help me revise for KCSE Physics", icon: GraduationCap },
                         { title: "Business Ideas", desc: "Start a side hustle in Nairobi", icon: TrendingUp },
                         { title: "Creative", desc: "YouTube script for tech news", icon: PenTool },
                         { title: "Code", desc: "Build a React Native app", icon: Code },
                       ].map((card, i) => (
-                        <button key={i} onClick={() => setInput(card.desc)} className="p-6 bg-white/5 hover:bg-white/10 border border-white/5 rounded-[24px] text-left transition-all group scale-100 hover:scale-102 active:scale-98">
-                          <card.icon className="w-6 h-6 text-gray-500 group-hover:text-white mb-4 transition-colors" />
-                          <h4 className="font-bold mb-1">{card.title}</h4>
-                          <p className="text-xs text-gray-500">{card.desc}</p>
+                        <button key={i} onClick={() => setInput(card.desc)} className="p-3 bg-zinc-950/40 hover:bg-zinc-900/40 border border-white/5 hover:border-purple-500/20 rounded-xl text-left transition-all duration-200 group flex items-start gap-3 scale-100 hover:scale-[1.01] active:scale-[0.99] w-full">
+                          <div className="p-1.5 bg-white/5 rounded-lg group-hover:bg-purple-500/10 transition-colors shrink-0">
+                            <card.icon className="w-3.5 h-3.5 text-zinc-400 group-hover:text-purple-400 transition-colors" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-xs font-bold text-zinc-200 group-hover:text-white transition-colors">{card.title}</h4>
+                            <p className="text-[10px] text-zinc-500 mt-0.5 truncate leading-relaxed">{card.desc}</p>
+                          </div>
                         </button>
                       ))}
                    </div>
@@ -1352,58 +1383,17 @@ export default function App() {
         </div>
 
         {/* Dynamic Glass Input Area */}
-        <div className="absolute bottom-0 left-0 right-0 p-8 pt-0 bg-gradient-to-t from-black via-black/80 to-transparent">
-           <div className="max-w-4xl mx-auto bg-zinc-900/50 backdrop-blur-3xl border border-white/10 p-2 rounded-[32px] shadow-2xl relative">
+        <div className="absolute bottom-0 left-0 right-0 p-4 pb-4 md:p-6 md:pb-6 bg-gradient-to-t from-black via-black/90 to-transparent z-40">
+           <div className="max-w-3xl mx-auto bg-zinc-900/60 backdrop-blur-3xl border border-white/10 rounded-2xl shadow-2xl relative overflow-hidden flex flex-col">
               
-              <div className="px-6 py-3 flex flex-wrap items-center gap-4 border-b border-white/5">
-                <div className="flex items-center gap-2">
-                  <span className="text-[8px] font-black uppercase text-gray-600 mr-2">Style:</span>
-                  {['Photorealistic', 'Anime', 'Technical', 'Logo', 'Posters'].map(s => (
-                    <button 
-                      key={s}
-                      onClick={() => setCreativeStyle(s)}
-                      className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all ${creativeStyle === s ? 'bg-purple-500 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[8px] font-black uppercase text-gray-600 mr-2">Ratio:</span>
-                  {['1:1', '16:9', '9:16', '3:2'].map(r => (
-                    <button 
-                      key={r}
-                      onClick={() => setAspectRatio(r)}
-                      className={`text-[9px] font-bold px-2 py-1 rounded-md transition-all ${aspectRatio === r ? 'bg-blue-500 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-2 ml-auto">
-                   <button 
-                    onClick={() => setImageFormat('jpeg')}
-                    className={`text-[9px] font-bold px-2 py-1 rounded ${imageFormat === 'jpeg' ? 'bg-white/10 text-white' : 'text-gray-600'}`}
-                  >
-                    JPG
-                  </button>
-                  <button 
-                    onClick={() => setImageFormat('png')}
-                    className={`text-[9px] font-bold px-2 py-1 rounded ${imageFormat === 'png' ? 'bg-white/10 text-white' : 'text-gray-600'}`}
-                  >
-                    PNG
-                  </button>
-                </div>
-              </div>
-
               {isLiveConsciousness && (
-                <div className="px-6 py-2.5 bg-black/40 border-b border-white/5 flex items-center justify-between gap-3 text-[11px] font-mono group/thought select-none">
+                <div className="px-4 py-1.5 bg-black/40 border-b border-white/5 flex items-center justify-between gap-3 text-[10px] font-mono select-none">
                    <div className="flex items-center gap-2 min-w-0 flex-1">
                       <div className="relative flex-shrink-0 flex items-center">
                          <Brain className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
-                         <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>
+                         <span className="absolute -top-0.5 -right-0.5 w-1 h-1 bg-emerald-400 rounded-full animate-ping"></span>
                       </div>
-                      <span className="text-gray-500 font-bold uppercase tracking-wider text-[9px] flex-shrink-0">Subconscious Loop:</span>
+                      <span className="text-gray-500 font-bold uppercase tracking-wider text-[8px] flex-shrink-0">Subconscious Loop:</span>
                       <span className="text-purple-300/90 font-medium truncate animate-pulse" key={currentThought}>
                          {currentThought}
                       </span>
@@ -1411,98 +1401,160 @@ export default function App() {
                    <button 
                      type="button"
                      onClick={() => setIsThoughtsConsoleOpen(true)}
-                     className="text-[9px] font-black uppercase tracking-wider text-purple-400 hover:text-white border border-purple-500/20 hover:border-purple-500/40 px-2 py-0.5 rounded bg-purple-500/5 transition-all flex-shrink-0"
+                     className="text-[8px] font-black uppercase tracking-wider text-purple-400 hover:text-white border border-purple-500/20 hover:border-purple-500/40 px-2 py-0.5 rounded bg-purple-500/5 transition-all flex-shrink-0"
                    >
-                      Telemetry Console
-                   </button>
-                </div>
-              )}
-
-              {editingImage && (
-                <div className="p-4 flex items-center gap-4 bg-purple-500/10 border-b border-white/5">
-                   <div className="w-12 h-12 rounded-lg overflow-hidden border border-purple-500/50">
-                      <img src={editingImage} className="w-full h-full object-cover" alt="Source" />
-                   </div>
-                   <div className="flex-1">
-                      <p className="text-xs font-bold text-purple-400">Editing Mode Active</p>
-                      <p className="text-[10px] text-gray-500">Describe the changes you want to apply...</p>
-                   </div>
-                   <button onClick={() => setEditingImage(null)} className="text-gray-500 hover:text-white">
-                      <MicOff className="w-4 h-4" />
+                      Telemetry
                    </button>
                 </div>
               )}
 
               {isListening && (
-                <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-white text-black px-6 py-2 rounded-full flex items-center gap-3 shadow-xl">
+                <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-white text-black px-6 py-2 rounded-full flex items-center gap-3 shadow-xl z-50">
                    <div className="flex gap-1">
                       {[1,2,3].map(i => <motion.div key={i} animate={{ height: [4, 12, 4] }} transition={{ duration: 0.5, repeat: Infinity, delay: i*0.1 }} className="w-1 bg-black rounded-full" />)}
                    </div>
-                   <span className="text-xs font-bold uppercase tracking-widest">Listening to voice...</span>
+                   <span className="text-xs font-bold uppercase tracking-widest">Listening...</span>
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="flex gap-2 p-2">
-                 <input 
-                  type="file" 
-                  id="image-upload" 
-                  className="hidden" 
-                  accept="image/*" 
-                  onChange={handleImageUpload} 
-                 />
-                 <button 
-                  type="button" 
-                  onClick={() => document.getElementById('image-upload')?.click()}
-                  className="p-4 hover:bg-white/5 rounded-2xl text-gray-500 hover:text-white transition-colors"
-                 >
-                    <ImageIcon className="w-5 h-5" />
-                 </button>
-                 <button 
-                  type="button" 
-                  onClick={handleVoiceInput}
-                  className={`p-4 rounded-2xl transition-all ${isListening ? 'bg-red-500 text-white' : 'hover:bg-white/5 text-gray-500 hover:text-white'}`}
-                 >
-                    {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                 </button>
-                 <textarea
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSubmit(e);
-                      }
-                    }}
-                    placeholder={`Hapa nikuzeidie na nini? (Ask Charles anything...)`}
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-lg py-4 placeholder:text-gray-600 resize-none h-14"
-                    disabled={isProcessing}
-                 />
-                 <button 
-                  type="button" 
-                  onClick={handleGenerateImage}
-                  disabled={!input.trim() || isProcessing}
-                  className={`p-4 rounded-2xl transition-all ${isGeneratingImage ? 'bg-purple-500 text-white' : 'hover:bg-white/5 text-purple-500 hover:text-purple-400'}`}
-                  title="Generate Image"
-                 >
-                    <Sparkles className="w-5 h-5" />
-                 </button>
-                 <button 
-                  type="submit"
-                  disabled={!input.trim() || isProcessing}
-                  className="bg-white text-black p-4 rounded-2xl font-black group hover:scale-105 active:scale-95 transition-all disabled:opacity-20 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-                 >
-                    {isProcessing ? (
-                      <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Send className="w-5 h-5" />
-                    )}
-                 </button>
+              <form onSubmit={handleSubmit} className="flex flex-col">
+                 {editingImage && (
+                   <div className="p-3 flex items-center gap-3 bg-purple-500/10 border-b border-white/5 text-xs">
+                      <div className="w-10 h-10 rounded-lg overflow-hidden border border-purple-500/30 flex-shrink-0">
+                         <img src={editingImage} className="w-full h-full object-cover" alt="Source" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                         <p className="font-bold text-purple-400 text-[11px]">Editing Mode Active</p>
+                         <p className="text-gray-500 text-[10px] truncate">Describe the alterations you'd like Charles to make...</p>
+                      </div>
+                      <button type="button" onClick={() => setEditingImage(null)} className="p-1 text-gray-500 hover:text-white transition-colors" title="Cancel edit mode">
+                         <Plus className="w-4 h-4 rotate-45" />
+                      </button>
+                   </div>
+                 )}
+
+                 <div className="p-3 pb-1 flex items-start gap-2">
+                    <textarea
+                       value={input}
+                       onChange={(e) => setInput(e.target.value)}
+                       onKeyDown={(e) => {
+                         if (e.key === 'Enter' && !e.shiftKey) {
+                           e.preventDefault();
+                           handleSubmit(e);
+                         }
+                       }}
+                       placeholder={activeAgent === 'Creative' ? "Fafanua picha unayotaka Charles aunde... (Describe image to generate...)" : "Hapa nikuzeidie na nini? (Ask Charles anything...)"}
+                       className="w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-[14px] md:text-sm text-white placeholder-zinc-500 resize-none h-10 md:h-12 py-1 leading-relaxed focus:border-none focus:ring-transparent focus:shadow-none bg-none outline-0"
+                       disabled={isProcessing}
+                    />
+                 </div>
+
+                 {/* Custom Minimal Bottom Actions Bar */}
+                 <div className="px-3 py-2 bg-black/10 border-t border-white/5 flex items-center justify-between gap-2 rounded-b-2xl">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                       <input 
+                        type="file" 
+                        id="image-upload" 
+                        className="hidden" 
+                        accept="image/*" 
+                        onChange={handleImageUpload} 
+                       />
+                       <button 
+                        type="button" 
+                        onClick={() => document.getElementById('image-upload')?.click()}
+                        className="p-1.5 hover:bg-white/5 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                        title="Upload context image"
+                       >
+                          <ImageIcon className="w-4 h-4" />
+                       </button>
+                       <button 
+                        type="button" 
+                        onClick={handleVoiceInput}
+                        className={`p-1.5 rounded-lg transition-all ${isListening ? 'bg-red-500/25 text-red-400' : 'hover:bg-white/5 text-zinc-400 hover:text-white'}`}
+                        title="Voice search"
+                       >
+                          {isListening ? <MicOff className="w-4 h-4 animate-pulse" /> : <Mic className="w-4 h-4" />}
+                       </button>
+
+                       {/* Compact Creative Controls - Displays only when Creative agent is selected */}
+                       {activeAgent === 'Creative' && (
+                         <div className="flex items-center gap-1.5 ml-1 overflow-x-auto no-scrollbar py-0.5">
+                            <select
+                              value={creativeStyle}
+                              onChange={(e) => setCreativeStyle(e.target.value)}
+                              className="bg-zinc-950/80 border border-white/10 hover:border-purple-500/30 text-[9px] font-bold text-zinc-300 rounded-md px-1.5 py-0.5 focus:ring-0 focus:outline-none cursor-pointer transition-colors"
+                              title="Style"
+                            >
+                              {['Photorealistic', 'Anime', 'Technical', 'Logo', 'Posters'].map(s => (
+                                <option key={s} value={s} className="bg-zinc-950 text-white text-[11px]">{s}</option>
+                              ))}
+                            </select>
+                            
+                            <select
+                              value={aspectRatio}
+                              onChange={(e) => setAspectRatio(e.target.value)}
+                              className="bg-zinc-950/80 border border-white/10 hover:border-blue-500/30 text-[9px] font-bold text-zinc-300 rounded-md px-1.5 py-0.5 focus:ring-0 focus:outline-none cursor-pointer transition-colors"
+                              title="Aspect Ratio"
+                            >
+                              {['1:1', '16:9', '9:16', '3:2'].map(r => (
+                                <option key={r} value={r} className="bg-zinc-950 text-white text-[11px]">{r}</option>
+                              ))}
+                            </select>
+
+                            <select
+                              value={imageFormat}
+                              onChange={(e) => setImageFormat(e.target.value as 'jpeg' | 'png')}
+                              className="bg-zinc-950/80 border border-white/10 hover:border-zinc-500/30 text-[9px] font-bold text-zinc-300 rounded-md px-1.5 py-0.5 focus:ring-0 focus:outline-none cursor-pointer transition-colors"
+                              title="Format"
+                            >
+                              {['jpeg', 'png'].map(f => (
+                                <option key={f} value={f} className="bg-zinc-950 text-white text-[11px] uppercase">{f}</option>
+                              ))}
+                            </select>
+                         </div>
+                       )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                       {/* Compact Active Agent Badge */}
+                       <span className="hidden sm:flex items-center gap-1.5 text-[8px] font-black uppercase tracking-[0.15em] text-purple-400 bg-purple-500/5 border border-purple-500/10 px-2 py-0.5 rounded-full">
+                          <span className="h-1 w-1 bg-purple-400 rounded-full animate-ping"></span>
+                          {activeAgent || "General"}
+                       </span>
+
+                       {/* Compact Sparkles Option */}
+                       <button 
+                        type="button" 
+                        onClick={handleGenerateImage}
+                        disabled={!input.trim() || isProcessing}
+                        className={`p-1.5 rounded-lg transition-all ${isGeneratingImage ? 'bg-purple-500 text-white' : 'hover:bg-white/5 text-purple-400 hover:text-purple-300 disabled:opacity-20'}`}
+                        title="AI Design Generator"
+                       >
+                          <Sparkles className="w-4 h-4" />
+                       </button>
+
+                       {/* Send submit button */}
+                       <button 
+                        type="submit"
+                        disabled={!input.trim() || isProcessing}
+                        className="bg-white text-black p-1.5 rounded-lg font-black group hover:scale-[1.03] active:scale-[0.97] transition-all disabled:opacity-20 ml-1 flex items-center justify-center"
+                        title="Send Request"
+                       >
+                          {isProcessing ? (
+                            <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Send className="w-4 h-4" />
+                          )}
+                       </button>
+                    </div>
+                 </div>
               </form>
-              <div className="px-6 pb-2">
-                 <p className="text-[9px] text-gray-600 font-bold uppercase tracking-[0.3em]">
-                   Powered by Gemini 2.5 Flash Image • Pro Creative Intelligence
-                 </p>
-              </div>
+           </div>
+           
+           <div className="text-center mt-2.5">
+              <p className="text-[8px] text-zinc-600 font-bold uppercase tracking-[0.25em]">
+                Powered by Gemini 2.5 Flash Image • Pro Creative Intelligence
+              </p>
            </div>
         </div>
       {/* Dynamic Telemetry Console Modal Overlay */}

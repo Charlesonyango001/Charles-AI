@@ -14,15 +14,17 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Lazy-initialized Gemini API SDK Client
 let aiInstance: GoogleGenAI | null = null;
+let initializedKey = "";
 
 function getAI(): GoogleGenAI {
-  if (!aiInstance) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
+  const currentKey = process.env.GEMINI_API_KEY || "";
+  if (!aiInstance || currentKey !== initializedKey) {
+    if (!currentKey) {
       console.warn("WARNING: GEMINI_API_KEY environment variable is not defined. Charles AI calls will fail.");
     }
+    initializedKey = currentKey;
     aiInstance = new GoogleGenAI({ 
-      apiKey: apiKey || "dummy_key_for_build",
+      apiKey: currentKey || "dummy_key_for_build",
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build',
@@ -31,6 +33,17 @@ function getAI(): GoogleGenAI {
     });
   }
   return aiInstance;
+}
+
+function validateApiKey(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || apiKey.trim() === "" || apiKey === "dummy_key_for_build") {
+    return res.status(400).json({
+      error: "GEMINI_API_KEY is not configured on the server. Please add your key in Settings > Secrets inside AI Studio to activate Charles AI.",
+      details: "API_KEY_MISSING"
+    });
+  }
+  next();
 }
 
 async function retryWithDelay<T>(fn: () => Promise<T>, retries = 4, delayMs = 1000): Promise<T> {
@@ -198,7 +211,7 @@ function sanitizeHistory(history: any[]) {
   return sanitized;
 }
 
-app.post("/api/charles/chat", async (req, res) => {
+app.post("/api/charles/chat", validateApiKey, async (req, res) => {
   try {
     const { message, history, agentType, enableMetacognition } = req.body;
     
@@ -279,14 +292,14 @@ app.post("/api/charles/chat", async (req, res) => {
   } catch (error: any) {
     console.error("Charles chat error:", error);
     res.status(500).json({ 
-      error: "Charles encountered a cosmic glitch. The mind was temporarily overloaded.",
+      error: `Charles AI model error: ${error?.message || String(error)}`,
       details: error?.message || String(error)
     });
   }
 });
 
 // Endpoint for image analysis
-app.post("/api/charles/analyze", async (req, res) => {
+app.post("/api/charles/analyze", validateApiKey, async (req, res) => {
   try {
     const { image, prompt, mimeType } = req.body;
     
@@ -343,9 +356,9 @@ app.post("/api/charles/analyze", async (req, res) => {
     }
     
     res.json({ text: response.text });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Vision error:", error);
-    res.status(500).json({ error: "Vision system offline." });
+    res.status(500).json({ error: `Vision system offline: ${error?.message || String(error)}` });
   }
 });
 
@@ -407,7 +420,7 @@ async function enhancePrompt(prompt: string, style: string = "general") {
 }
 
 // Image Generation Endpoint
-app.post("/api/charles/generate", async (req, res) => {
+app.post("/api/charles/generate", validateApiKey, async (req, res) => {
   try {
     const { prompt, format, aspectRatio, style } = req.body;
     
@@ -442,14 +455,14 @@ app.post("/api/charles/generate", async (req, res) => {
     const imageUrl = `data:${format === "png" ? "image/png" : "image/jpeg"};base64,${base64}`;
     
     res.json({ imageUrl, enhancedPrompt: finalPrompt });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Image gen error:", error);
-    res.status(500).json({ error: "Creative engines stalled. Try again later." });
+    res.status(500).json({ error: `Creative engines stalled: ${error?.message || String(error)}` });
   }
 });
 
 // Image Editing / Image-to-Image Endpoint
-app.post("/api/charles/edit", async (req, res) => {
+app.post("/api/charles/edit", validateApiKey, async (req, res) => {
   try {
     const { image, prompt } = req.body;
     
@@ -483,9 +496,9 @@ app.post("/api/charles/edit", async (req, res) => {
     const imageUrl = `data:image/jpeg;base64,${base64}`;
     
     res.json({ imageUrl });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Image edit error:", error);
-    res.status(500).json({ error: "Image morphing failed." });
+    res.status(500).json({ error: `Image morphing failed: ${error?.message || String(error)}` });
   }
 });
 
